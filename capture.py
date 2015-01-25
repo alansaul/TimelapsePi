@@ -28,6 +28,7 @@ ACTIONS = [START, STOP, LEFT, RIGHT, INFO, IMAGE]
 with open("lol_cat.jpg", "rb") as imageFile:
     image_bytes = bytearray(imageFile.read())
 
+
 def find_connections():
     """Block until a bluetooth connection is made"""
     # print "External"
@@ -47,10 +48,10 @@ def find_connections():
     lb.advertise("LightBlueService", s, lb.RFCOMM)
     print "Advertised at {} and listening on channel {}...".format(s.getsockname()[0], s.getsockname()[1])
     print "Waiting to accept"
-    #s.setblocking(1)
+    # s.setblocking(1)
     conn, addr = s.accept()
     # Set timeout for 1 second
-    #s.settimeout(1.0)
+    # s.settimeout(1.0)
     print "Connected by", addr
     return conn, addr, s
 
@@ -68,7 +69,7 @@ class Camera(object):
         self.close()
         time.sleep(1)
         # proc = subprocess.Popen(["gphoto2", "--capture-image-and-download", "-I", "-1", "--force-overwrite"])# shell=True)
-        self.proc = subprocess.call(["gphoto2", "--capture-image-and-download", "-I", "-1", "--force-overwrite"], shell=True)
+        self.proc = subprocess.Popen(["gphoto2", "--capture-image-and-download", "-I", "-1", "--force-overwrite"], shell=True)
         print "Pausing"
         time.sleep(1)
 
@@ -107,42 +108,18 @@ class Camera(object):
             return details
 
 
-class TimelapseController(object):
+class BluetoothController(object):
     def __init__(self, camera, interval=1, impulse_length=0.5):
         self.camera = camera
         self.interval = interval
         self.impulse_length = impulse_length
-        self.timelapse_thread = None
         # Threadsafe requests handling between threads using queue
         self.request_queue = Queue.Queue()
         self.send_queue = Queue.Queue()
         self.finished = False
+        self.conn = None
+        self.sock = None
         self.start()
-
-    def start_timelapse(self):
-        """Start timelapse, in thread"""
-        if self.timelapse_thread is not None:
-            self.timelapse_thread.stop()
-            time.sleep(5)
-        self.timelapse_thread = TimelapseThread("Timelapse thread: {}".format(self.thread_num),
-                                                self.camera, self.interval, self.impulse_length,
-                                                self.request_queue, self.send_queue)
-        self.timelapse_thread.start()
-
-    def stop_timelapse(self):
-        """End timelapse thread"""
-        if self.timelapse_thread is not None:
-            self.timelapse_thread.stop()
-
-    def listen_bluetooth(self):
-        """Listen to bluetooth"""
-        self.bluetooth = BluetoothThread(self.request_queue, self.send_queue, self.conn)
-        self.bluetooth.start()
-
-    def stop_bluetooth(self):
-        """Stop listening on bluetooth"""
-        if self.bluetooth_thread is not None:
-            self.bluetooth_thread.stop()
 
     def start(self):
         """
@@ -152,80 +129,44 @@ class TimelapseController(object):
         print "Starting to listen"
         while not self.finished:
             try:
-                self.conn, self.addr, self.socket = find_connections()
-                self.conn.settimeout(5)
-                self.listen_bluetooth()
-                self.mediate()
+                self.conn, self.addr, self.sock = find_connections()
+                self.conn.settimeout(1)
+                self.request_handler = RequestHandler(self.request_queue, self.send_queue, self.camera,
+                                                      self.interval, self.impulse_length)
+                self.request_handler.start()
+                self.send_receive()
             except KeyboardInterrupt:
                 self.stop()
+                if self.conn is not None:
+                    self.conn.close()
+                if self.sock is not None:
+                    self.sock.close()
             except socket_mod.error, e:
                 print e
-                time.sleep(1)
-            finally:
-                print "Closing"
                 if self.conn is not None:
                     self.conn.close()
                 if self.sock is not None:
                     self.sock.close()
 
-    def mediate(self):
-        while not self.finished:
-            print "Waiting for request"
-            command, action, data = self.request_queue.get(block=True)
-            print "Got c: {} a: {}, d: {}".format(command, action, data)
-            if command == MOVE and action == START:
-                self.start()
-            elif command == MOVE and action == STOP:
-                self.stop()
-            elif command == CAMERA and action == IMAGE:
-                image_data = self.camera.last_image()
-                self.send_queue.put((SEND, IMAGE, image_data))
-            elif command == CAMERA and action == INFO:
-                details_data = self.camera.details()
-                self.send_queue.put((SEND, INFO, details_data))
-            else:
-                print "Not a request I can handle yet"
-
-    def stop(self):
-        self.stop_bluetooth()
-        self.stop_timelapse()
-        self.finished = True
-
-
-class BluetoothThread(threading.Thread):
-    def __init__(self, request_queue, send_queue, conn):
-        threading.Thread.__init__(self)
-        self.request_queue = request_queue
-        self.send_queue = send_queue
-        self.finished = False
-        self.conn = conn
-
-    def run(self):
-        print "Bluetooth Thread started"
-        while not self.finished:
-            self.send_receive()
-
-        print "Bluetooth Thread stopped"
-
     def send_receive(self):
-        """Block waiting to receive and then send response"""
-        print "Send and receive called"
-        try:
-            # Wait for a second for communication then handle sending things back
-            print "Waiting to receive"
-            command_str = self.conn.recv(1024)
-            print "Recieved: {}".format(command_str)
-            sys.stdout.flush()
-            self.perform_command(command_str)
-        except socket_mod.timeout:
-            # When we get a break in requests, handle sending back data
-            print "Timed out, no requests came in"
-        finally:
-            print "Handling any sending requests"
-            if not self.send_queue.empty():
-                #No garentee that it is not empty if there is more than 1 thing getting the send queue
-                command, action, data = self.send_queue.get(blocking=False)
-                self.send(command, action, data)
+        while not self.finished:
+            try:
+                command_str = self.conn.recv(1024)
+                self.perform_command(command_str)
+                self.perform_send()
+            except socket_mod.timeout:
+                # When we get a break in requests, handle sending back data
+                # print "Timed out, no requests came in"
+                pass
+            finally:
+                # print "Handling any sending requests"
+                self.perform_send()
+
+    def perform_send(self):
+        while not self.send_queue.empty():
+            # No garentee that it is not empty if there is more than 1 thing getting the send queue
+            command, action, data = self.send_queue.get()
+            self.send(command, action, data)
 
     def send(self, command, action, data):
         """Send data"""
@@ -255,33 +196,87 @@ class BluetoothThread(threading.Thread):
             command, action = commands
             data = None
             if command in COMMANDS and action in ACTIONS:
-                self.requests.put((command, action, data))
+                self.request_queue.put((command, action, data))
             else:
                 print "Corrupt action"
         else:
             print "Not a command, must be of form COMMAND#ACTION"
 
     def stop(self):
-        """Initiate the stopping of bluetooth thread"""
+        self.finished = True
+
+
+class RequestHandler(threading.Thread):
+    def __init__(self, request_queue, send_queue, camera, interval, impulse_length):
+        threading.Thread.__init__(self)
+        self.request_queue = request_queue
+        self.send_queue = send_queue
+        self.camera = camera
+        self.interval = interval
+        self.impulse_length = impulse_length
+        self.thread_num = 1
+        self.timelapse_thread = None
+        self.finished = False
+
+    def run(self):
+        while not self.finished:
+            print "Waiting for request"
+            command, action, data = self.request_queue.get(block=True)
+            print "Got c: {} a: {}, d: {}".format(command, action, data)
+            if command == MOVE and action == LEFT:
+                self.start_timelapse()
+            if command == MOVE and action == START:
+                self.start_timelapse()
+            elif command == MOVE and action == STOP:
+                self.stop_timelapse()
+            elif command == CAMERA and action == IMAGE:
+                image_data = self.camera.last_image()
+                self.send_queue.put((SEND, IMAGE, image_data))
+            elif command == CAMERA and action == INFO:
+                details_data = self.camera.details()
+                self.send_queue.put((SEND, INFO, details_data))
+            else:
+                print "Not a request I can handle yet"
+
+    def start_timelapse(self):
+        """Start timelapse, in thread"""
+        if self.timelapse_thread is not None:
+            self.timelapse_thread.stop()
+            time.sleep(5)
+        self.timelapse_thread = TimelapseThread("Timelapse thread: {}".format(self.thread_num),
+                                                self.camera, self.interval, self.impulse_length,
+                                                self.request_queue)
+        self.timelapse_thread.start()
+        self.thread_num = self.thread_num + 1
+
+    def stop_timelapse(self):
+        """End timelapse thread"""
+        if self.timelapse_thread is not None:
+            self.timelapse_thread.stop()
+
+    def stop(self):
+        self.stop_timelapse()
         self.finished = True
 
 
 class TimelapseThread(threading.Thread):
     def __init__(self, name, camera, interval, impulse_length, request_queue):
         threading.Thread.__init__(self)
+        self.camera = camera
         self.interval = interval
         self.impulse_length = impulse_length
         self.lock = threading.RLock()
         self.finished = False
         self.request_queue = request_queue
+        self.direction = LEFT
 
     def run(self):
         """Run timelapse"""
         while not self.finished:
             self.move()
+            # Wait for correct amount of time
             time.sleep(self.impulse_length)
             self.capture()
-            # Wait for correct amount of time
 
     def stop(self):
         """Initiate the stopping of timelapsing thread"""
@@ -290,7 +285,8 @@ class TimelapseThread(threading.Thread):
     def move(self):
         """Send inpulse through GPIO"""
         with self.lock:
-            print "Moving {}".format(self.directon)
+            print "Moving {}".format(self.direction)
+            time.sleep(self.impulse_length)
 
     def capture(self):
         """Capture"""
@@ -308,4 +304,4 @@ camera = Camera()
 
 # camera.close()
 
-timelapse_controller = TimelapseController(camera, interval=1, impulse_length=0.5)
+bluetooth_controller = BluetoothController(camera, interval=1, impulse_length=0.5)
