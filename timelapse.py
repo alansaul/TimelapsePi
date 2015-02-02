@@ -7,7 +7,6 @@ import threading
 import Queue
 import lightblue as lb
 import socket as socket_mod
-import sys
 
 # Commands
 MOVE = 'MOVE'
@@ -19,11 +18,12 @@ COMMANDS = [MOVE, CAMERA, SEND, REQUEST]
 # Actions
 START = 'START'
 STOP = 'STOP'
+SHUTDOWN = 'SHUTDOWN'
 LEFT = 'LEFT'
 RIGHT = 'RIGHT'
 INFO = 'INFO'
 IMAGE = 'IMAGE'
-ACTIONS = [START, STOP, LEFT, RIGHT, INFO, IMAGE]
+ACTIONS = [START, STOP, SHUTDOWN, LEFT, RIGHT, INFO, IMAGE]
 
 with open("lol_cat.jpg", "rb") as imageFile:
     image_bytes = bytearray(imageFile.read())
@@ -49,7 +49,11 @@ def find_connections():
     print "Advertised at {} and listening on channel {}...".format(s.getsockname()[0], s.getsockname()[1])
     print "Waiting to accept"
     # s.setblocking(1)
-    conn, addr = s.accept()
+    try:
+        conn, addr = s.accept()
+    except KeyboardInterrupt:
+        s.close()
+        raise KeyboardInterrupt
     # Set timeout for 1 second
     # s.settimeout(1.0)
     print "Connected by", addr
@@ -126,31 +130,42 @@ class BluetoothController(object):
         Annoyingly lightblue doesn't appear threadsafe to accept connections
         Thus much of this logic belongs in the bluetooth thread
         """
-        print "Starting to listen"
+        print "Starting BluetoothController"
+        self.request_handler = RequestHandler(self.request_queue, self.send_queue, self.camera,
+                                                self.interval, self.impulse_length)
+        self.request_handler.register_stop(self.stop)
+        self.request_handler.start()
         while not self.finished:
             try:
                 self.conn, self.addr, self.sock = find_connections()
                 self.conn.settimeout(1)
-                self.request_handler = RequestHandler(self.request_queue, self.send_queue, self.camera,
-                                                      self.interval, self.impulse_length)
-                self.request_handler.start()
                 self.send_receive()
             except KeyboardInterrupt:
                 self.stop()
-                if self.conn is not None:
-                    self.conn.close()
-                if self.sock is not None:
-                    self.sock.close()
             except socket_mod.error, e:
                 print e
-                if self.conn is not None:
-                    self.conn.close()
-                if self.sock is not None:
-                    self.sock.close()
+                self.close_conn()
+
+        print "BluetoothController closing"
+
+    def close_conn(self):
+        print "Closing connection"
+        if self.conn is not None:
+            self.conn.shutdown(socket_mod.SHUT_RDWR)
+            self.conn.close()
+        print "Closing socket"
+        if self.sock is not None:
+            self.sock.shutdown(socket_mod.SHUT_RDWR)
+            self.sock.close()
+        print "Closed socket and connection"
 
     def send_receive(self):
         while not self.finished:
             try:
+                #Should use select here to avoid a delay in handling sends, lightblue
+                #does not implement fileno though in its sockets... sigh. Switch to
+                #pybluez when using linux (refactor accordingly as bluetooth will
+                #probably be possible to run in a thread aswell.)
                 command_str = self.conn.recv(1024)
                 self.perform_command(command_str)
                 self.perform_send()
@@ -173,7 +188,6 @@ class BluetoothController(object):
         print "Send {}: {}".format(CAMERA, action)
         if action == IMAGE:
             # image_bytes = data
-            # image_bytes = self.camera.get_image()
             file_bytesize = len(image_bytes)
             image_str = str(image_bytes)
             data = CAMERA + "#" + IMAGE + "#" + str(file_bytesize)
@@ -199,12 +213,18 @@ class BluetoothController(object):
                 self.request_queue.put((command, action, data))
             else:
                 print "Corrupt action"
+        elif command_str == '':
+            #Gets received when the server socket is closed (should be -1)
+            print "Command suggests socket is being closed, ignore this command and close the socket"
+            self.stop()
         else:
-            print "Not a command, must be of form COMMAND#ACTION"
+            print "Not a command, must be of form COMMAND#ACTION: {}".format(command_str)
 
     def stop(self):
+        """Close the socket and indicate the loop should finish"""
+        self.close_conn()
         self.finished = True
-
+        print "Finished closing"
 
 class RequestHandler(threading.Thread):
     def __init__(self, request_queue, send_queue, camera, interval, impulse_length):
@@ -217,26 +237,43 @@ class RequestHandler(threading.Thread):
         self.thread_num = 1
         self.timelapse_thread = None
         self.finished = False
+        self.stop_callbacks = []
+        self.setDaemon(True)
 
     def run(self):
         while not self.finished:
             print "Waiting for request"
-            command, action, data = self.request_queue.get(block=True)
-            print "Got c: {} a: {}, d: {}".format(command, action, data)
-            if command == MOVE and action == LEFT:
-                self.start_timelapse()
-            if command == MOVE and action == START:
-                self.start_timelapse()
-            elif command == MOVE and action == STOP:
-                self.stop_timelapse()
-            elif command == CAMERA and action == IMAGE:
-                image_data = self.camera.last_image()
-                self.send_queue.put((SEND, IMAGE, image_data))
-            elif command == CAMERA and action == INFO:
-                details_data = self.camera.details()
-                self.send_queue.put((SEND, INFO, details_data))
-            else:
-                print "Not a request I can handle yet"
+            try:
+                command, action, data = self.request_queue.get(block=True, timeout=1)
+                print "Got c: {} a: {}, d: {}".format(command, action, data)
+                if command == MOVE and action == LEFT:
+                    self.change_direction(LEFT)
+                if command == MOVE and action == RIGHT:
+                    self.change_direction(RIGHT)
+                elif command == REQUEST and action == START:
+                    self.start_timelapse()
+                elif command == REQUEST and action == STOP:
+                    self.stop_timelapse()
+                elif command == REQUEST and action == SHUTDOWN:
+                    self.shutdown_pi()
+                elif command == CAMERA and action == IMAGE:
+                    image_data = self.camera.last_image()
+                    self.send_queue.put((SEND, IMAGE, image_data))
+                elif command == CAMERA and action == INFO:
+                    details_data = self.camera.details()
+                    self.send_queue.put((SEND, INFO, details_data))
+                else:
+                    print "Not a request I can handle yet"
+            except Queue.Empty:
+                pass
+        print "HANDLER FINALLY CLOSING"
+        for callback in self.stop_callbacks:
+            callback()
+
+    def shutdown_pi(self):
+        """Shutdown Pi gracefully"""
+        print "Shutting down Pi"
+        self.stop()
 
     def start_timelapse(self):
         """Start timelapse, in thread"""
@@ -255,8 +292,13 @@ class RequestHandler(threading.Thread):
             self.timelapse_thread.stop()
 
     def stop(self):
+        print "Stopping thread"
         self.stop_timelapse()
         self.finished = True
+        #print "Still stopping thread"
+
+    def register_stop(self, callback):
+        self.stop_callbacks.append(callback)
 
 
 class TimelapseThread(threading.Thread):
