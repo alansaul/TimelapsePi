@@ -7,6 +7,7 @@ import threading
 import Queue
 import lightblue as lb
 import socket as socket_mod
+from capture import Camera
 
 # Commands
 MOVE = 'MOVE'
@@ -58,59 +59,6 @@ def find_connections():
     # s.settimeout(1.0)
     print "Connected by", addr
     return conn, addr, s
-
-
-class Camera(object):
-    def __init__(self):
-        self.proc = None
-        self.last_photo = None
-        self.lock = threading.RLock()
-        self.setup_camera()
-
-    def setup_camera(self):
-        """Setup camera"""
-        print "Setting up"
-        self.close()
-        time.sleep(1)
-        # proc = subprocess.Popen(["gphoto2", "--capture-image-and-download", "-I", "-1", "--force-overwrite"])# shell=True)
-        self.proc = subprocess.Popen(["gphoto2", "--capture-image-and-download", "-I", "-1", "--force-overwrite"], shell=True)
-        print "Pausing"
-        time.sleep(1)
-
-    def capture(self):
-        """Capture image"""
-        with self.lock:
-            print "Capturing"
-            if self.proc is None:
-                self.setup_camera()
-            self.proc.send_signal(signal.SIGUSR1)
-            # os.kill(proc.pid, signal.SIGUSR1)
-            print "Signal sent"
-
-    def close(self):
-        """Close the capturing scheme"""
-        with self.lock:
-            print "Closing"
-            if self.proc is not None:
-                os.kill(self.proc.pid, signal.SIGKILL)
-                time.sleep(1)
-            call(["killall", "gphoto2"])
-            call(["killall", "PTPCamera"])
-
-    def last_image(self):
-        """Get the last image"""
-        # Call download image, then get the image as a Image file
-        with self.lock:
-            last_image = None
-            return last_image
-
-    def details(self):
-        """Get the settings"""
-        # Get image capturing details
-        with self.lock:
-            details = None
-            return details
-
 
 class BluetoothController(object):
     def __init__(self, camera, interval=1, impulse_length=0.5):
