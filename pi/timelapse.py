@@ -1,3 +1,4 @@
+import lightblue as lb
 from subprocess import call
 import subprocess
 import signal
@@ -5,7 +6,6 @@ import os
 import time
 import threading
 import Queue
-import lightblue as lb
 import socket as socket_mod
 from capture import Camera
 
