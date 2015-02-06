@@ -6,11 +6,13 @@ import time
 import signal
 
 class Camera(object):
-    def __init__(self,  folder="/store_00010001/DCIM/101D7000", hook_script="process_image.sh"):
+    def __init__(self,  folder="/store_00010001/DCIM/101D7000", hook_script="process_image.sh", latest_image_fname="last_image.jpg", latest_exif_fname='latest_exif.txt'):
         self.proc = None
         self.last_photo = None
         self.storage_folder = folder
 	self.hook_script = hook_script
+        self.latest_image_fname = latest_image_fname
+        self.latest_exif_fname = latest_exif_fname
 	#self.filename = filename
 	#filename="capt%y%m%d%H%M%S.jpg",
         self.lock = threading.RLock()
@@ -26,7 +28,7 @@ class Camera(object):
 	time.sleep(1)
 	#Setup capture with interval -1 so it is waiting for SIGUSR1
         #self.proc = subprocess.Popen(["gphoto2", "--capture-image", "-I", "-1", "&"])
-	self.proc = subprocess.Popen(["gphoto2", "--capture-image-and-download", "--keep", "-I", "-1", "--force-overwrite", "--filename", "latest_image.jpg", "--hook-script={}".format(self.hook_script), "&"])
+	self.proc = subprocess.Popen(["gphoto2", "--capture-image-and-download", "--keep", "-I", "-1", "--force-overwrite", "--filename", self.latest_image_fname, "--hook-script={}".format(self.hook_script), "&"])
 	
 	#"--filename={}".format(self.filename), 
         print "Pausing"
@@ -62,19 +64,26 @@ class Camera(object):
         """Get the last image"""
         # Call download image, then get the image as a Image file
         with self.lock:
-            last_image = None
-	    out = subprocess.check_output(["gphoto2", "--folder={}".format(self.storage_folder), "-n"])
-	    last_image_id = out.split(':')[-1].strip()
-            subprocess.Popen(["gphoto2", "--folder={}".format(self.storage_folder), "--get-file", last_image_id])
-            return last_image
+            latest_image_bytes = None
+	    #out = subprocess.check_output(["gphoto2", "--folder={}".format(self.storage_folder), "-n"])
+	    #latest_image_fname_id = out.split(':')[-1].strip()
+            #subprocess.Popen(["gphoto2", "--folder={}".format(self.storage_folder), "--get-file", latest_image_fname_id])
+            if os.path.isfile(self.latest_image_fname):
+                with open(self.latest_image_fname, "rb") as imageFile:
+		    latest_image_bytes = bytearray(imageFile.read())
+                    print "Got the latest image from the camera"
+            else:
+                print "File does not exist yet"
+            return latest_image_bytes
 
     def details(self):
         """Get the settings"""
         # Get image capturing details
         with self.lock:
 	    details = 'No info available'
-            with open('latest_exif.txt', 'r') as f:
-		details = f.read()
+            if os.path.isfile(self.latest_image_fname):
+                with open(self.latest_exif_fname, 'r') as f:
+		    details = f.read()
             return details
 
 if __name__ == '__main__':

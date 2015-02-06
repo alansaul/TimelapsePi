@@ -61,7 +61,7 @@ def find_connections():
     return conn, addr, s
 
 class BluetoothController(object):
-    def __init__(self, camera, interval=1, impulse_length=0.5):
+    def __init__(self, camera, interval=1, impulse_length=30):
         self.camera = camera
         self.interval = interval
         self.impulse_length = impulse_length
@@ -136,7 +136,7 @@ class BluetoothController(object):
         """Send data"""
         print "Send {}: {}".format(CAMERA, action)
         if action == IMAGE:
-            # image_bytes = data
+            image_bytes = data
             file_bytesize = len(image_bytes)
             image_str = str(image_bytes)
             data = CAMERA + "#" + IMAGE + "#" + str(file_bytesize)
@@ -208,7 +208,8 @@ class RequestHandler(threading.Thread):
                     self.shutdown_pi()
                 elif command == CAMERA and action == IMAGE:
                     image_data = self.camera.last_image()
-                    self.send_queue.put((SEND, IMAGE, image_data))
+                    if image_data is not None:
+                        self.send_queue.put((SEND, IMAGE, image_data))
                 elif command == CAMERA and action == INFO:
                     details_data = self.camera.details()
                     self.send_queue.put((SEND, INFO, details_data))
@@ -296,4 +297,9 @@ camera = Camera()
 
 # camera.close()
 
-bluetooth_controller = BluetoothController(camera, interval=1, impulse_length=0.5)
+try:
+    bluetooth_controller = BluetoothController(camera, interval=1, impulse_length=30)
+except Exception:
+    pass
+finally:
+    camera.close()
