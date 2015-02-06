@@ -173,7 +173,7 @@ class BluetoothController(object):
         """Close the socket and indicate the loop should finish"""
         self.close_conn()
         self.finished = True
-	self.request_handler.finished = True
+	self.request_handler.stop()
         print "Finished closing"
 
 class RequestHandler(threading.Thread):
