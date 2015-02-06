@@ -83,6 +83,7 @@ class BluetoothController(object):
                                                 self.interval, self.impulse_length)
         self.request_handler.register_stop(self.stop)
         self.request_handler.start()
+	self.request_handler.start_timelapse()
         while not self.finished:
             try:
                 self.conn, self.addr, self.sock = find_connections()
