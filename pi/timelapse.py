@@ -100,12 +100,25 @@ class BluetoothController(object):
     def close_conn(self):
         print "Closing connection"
         if self.conn is not None:
-            self.conn.shutdown(socket_mod.SHUT_RDWR)
-            self.conn.close()
+	    try:
+                self.conn.shutdown(socket_mod.SHUT_RDWR)
+            except Exception:
+	        print "Failed to shutdown conn"
+	    try:
+                self.conn.close()
+            except Exception:
+                print "Failed to close conn"
+           
         print "Closing socket"
         if self.sock is not None:
-            self.sock.shutdown(socket_mod.SHUT_RDWR)
-            self.sock.close()
+	    try:
+                self.sock.shutdown(socket_mod.SHUT_RDWR)
+            except Exception:
+	        print "Failed to shutdown sock"
+	    try:
+                self.sock.close()
+            except Exception:
+                print "Failed to close sock"
         print "Closed socket and connection"
 
     def send_receive(self):
@@ -140,13 +153,14 @@ class BluetoothController(object):
             file_bytesize = len(image_bytes)
             image_str = str(image_bytes)
             data = CAMERA + "#" + IMAGE + "#" + str(file_bytesize)
+            print data
             self.conn.send(data)
             print "Sending image"
             self.conn.send(image_str)
             print "Sent image"
         elif action == INFO:
-            # details = data
-            details = "these, are, some, details"
+            #details = "these, are, some, details"
+            details = data
             data = CAMERA + "#" + INFO + "#" + details
             print "Sending details"
             self.conn.send(data)
@@ -195,7 +209,7 @@ class RequestHandler(threading.Thread):
             print "Waiting for request"
             try:
                 command, action, data = self.request_queue.get(block=True, timeout=1)
-                print "Got c: {} a: {}, d: {}".format(command, action, data)
+                print "Got command: {} action: {}, data: {}".format(command, action, data)
                 if command == MOVE and action == LEFT:
                     self.change_direction(LEFT)
                 if command == MOVE and action == RIGHT:
@@ -208,11 +222,13 @@ class RequestHandler(threading.Thread):
                     self.shutdown_pi()
                 elif command == CAMERA and action == IMAGE:
                     image_data = self.camera.last_image()
+                    print "Got image ", image_data
                     if image_data is not None:
                         self.send_queue.put((SEND, IMAGE, image_data))
                 elif command == CAMERA and action == INFO:
                     details_data = self.camera.details()
-                    self.send_queue.put((SEND, INFO, details_data))
+                    if details_data is not None:
+                        self.send_queue.put((SEND, INFO, details_data))
                 else:
                     print "Not a request I can handle yet"
             except Queue.Empty:

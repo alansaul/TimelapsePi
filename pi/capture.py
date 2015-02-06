@@ -68,10 +68,11 @@ class Camera(object):
 	    #out = subprocess.check_output(["gphoto2", "--folder={}".format(self.storage_folder), "-n"])
 	    #latest_image_fname_id = out.split(':')[-1].strip()
             #subprocess.Popen(["gphoto2", "--folder={}".format(self.storage_folder), "--get-file", latest_image_fname_id])
+            print "Getting last image"
             if os.path.isfile(self.latest_image_fname):
-                with open(self.latest_image_fname, "rb") as imageFile:
-		    latest_image_bytes = bytearray(imageFile.read())
-                    print "Got the latest image from the camera"
+                with open("thumb_{}".format(self.latest_image_fname), "rb") as imageFile:
+                    latest_image_bytes = bytearray(imageFile.read())
+                    print "Got the latest image from the camera, thumb_{} of length {}".format(self.latest_image_fname, len(latest_image_bytes))
             else:
                 print "File does not exist yet"
             return latest_image_bytes
@@ -80,6 +81,7 @@ class Camera(object):
         """Get the settings"""
         # Get image capturing details
         with self.lock:
+            print "Getting details"
 	    details = 'No info available'
             if os.path.isfile(self.latest_image_fname):
                 with open(self.latest_exif_fname, 'r') as f:
