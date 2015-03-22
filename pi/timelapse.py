@@ -1,3 +1,4 @@
+import lightblue as lb
 from subprocess import call
 import subprocess
 import signal
@@ -5,8 +6,8 @@ import os
 import time
 import threading
 import Queue
-import lightblue as lb
 import socket as socket_mod
+from capture import Camera
 
 # Commands
 MOVE = 'MOVE'
@@ -59,61 +60,8 @@ def find_connections():
     print "Connected by", addr
     return conn, addr, s
 
-
-class Camera(object):
-    def __init__(self):
-        self.proc = None
-        self.last_photo = None
-        self.lock = threading.RLock()
-        self.setup_camera()
-
-    def setup_camera(self):
-        """Setup camera"""
-        print "Setting up"
-        self.close()
-        time.sleep(1)
-        # proc = subprocess.Popen(["gphoto2", "--capture-image-and-download", "-I", "-1", "--force-overwrite"])# shell=True)
-        self.proc = subprocess.Popen(["gphoto2", "--capture-image-and-download", "-I", "-1", "--force-overwrite"], shell=True)
-        print "Pausing"
-        time.sleep(1)
-
-    def capture(self):
-        """Capture image"""
-        with self.lock:
-            print "Capturing"
-            if self.proc is None:
-                self.setup_camera()
-            self.proc.send_signal(signal.SIGUSR1)
-            # os.kill(proc.pid, signal.SIGUSR1)
-            print "Signal sent"
-
-    def close(self):
-        """Close the capturing scheme"""
-        with self.lock:
-            print "Closing"
-            if self.proc is not None:
-                os.kill(self.proc.pid, signal.SIGKILL)
-                time.sleep(1)
-            call(["killall", "gphoto2"])
-            call(["killall", "PTPCamera"])
-
-    def last_image(self):
-        """Get the last image"""
-        # Call download image, then get the image as a Image file
-        with self.lock:
-            last_image = None
-            return last_image
-
-    def details(self):
-        """Get the settings"""
-        # Get image capturing details
-        with self.lock:
-            details = None
-            return details
-
-
 class BluetoothController(object):
-    def __init__(self, camera, interval=1, impulse_length=0.5):
+    def __init__(self, camera, interval=1, impulse_length=30):
         self.camera = camera
         self.interval = interval
         self.impulse_length = impulse_length
@@ -135,6 +83,7 @@ class BluetoothController(object):
                                                 self.interval, self.impulse_length)
         self.request_handler.register_stop(self.stop)
         self.request_handler.start()
+	self.request_handler.start_timelapse()
         while not self.finished:
             try:
                 self.conn, self.addr, self.sock = find_connections()
@@ -151,12 +100,25 @@ class BluetoothController(object):
     def close_conn(self):
         print "Closing connection"
         if self.conn is not None:
-            self.conn.shutdown(socket_mod.SHUT_RDWR)
-            self.conn.close()
+	    try:
+                self.conn.shutdown(socket_mod.SHUT_RDWR)
+            except Exception:
+	        print "Failed to shutdown conn"
+	    try:
+                self.conn.close()
+            except Exception:
+                print "Failed to close conn"
+           
         print "Closing socket"
         if self.sock is not None:
-            self.sock.shutdown(socket_mod.SHUT_RDWR)
-            self.sock.close()
+	    try:
+                self.sock.shutdown(socket_mod.SHUT_RDWR)
+            except Exception:
+	        print "Failed to shutdown sock"
+	    try:
+                self.sock.close()
+            except Exception:
+                print "Failed to close sock"
         print "Closed socket and connection"
 
     def send_receive(self):
@@ -187,17 +149,18 @@ class BluetoothController(object):
         """Send data"""
         print "Send {}: {}".format(CAMERA, action)
         if action == IMAGE:
-            # image_bytes = data
+            image_bytes = data
             file_bytesize = len(image_bytes)
             image_str = str(image_bytes)
             data = CAMERA + "#" + IMAGE + "#" + str(file_bytesize)
+            print data
             self.conn.send(data)
             print "Sending image"
             self.conn.send(image_str)
             print "Sent image"
         elif action == INFO:
-            # details = data
-            details = "these, are, some, details"
+            #details = "these, are, some, details"
+            details = data
             data = CAMERA + "#" + INFO + "#" + details
             print "Sending details"
             self.conn.send(data)
@@ -224,6 +187,7 @@ class BluetoothController(object):
         """Close the socket and indicate the loop should finish"""
         self.close_conn()
         self.finished = True
+	self.request_handler.stop()
         print "Finished closing"
 
 class RequestHandler(threading.Thread):
@@ -245,7 +209,7 @@ class RequestHandler(threading.Thread):
             print "Waiting for request"
             try:
                 command, action, data = self.request_queue.get(block=True, timeout=1)
-                print "Got c: {} a: {}, d: {}".format(command, action, data)
+                print "Got command: {} action: {}, data: {}".format(command, action, data)
                 if command == MOVE and action == LEFT:
                     self.change_direction(LEFT)
                 if command == MOVE and action == RIGHT:
@@ -258,10 +222,13 @@ class RequestHandler(threading.Thread):
                     self.shutdown_pi()
                 elif command == CAMERA and action == IMAGE:
                     image_data = self.camera.last_image()
-                    self.send_queue.put((SEND, IMAGE, image_data))
+                    print "Got image ", image_data
+                    if image_data is not None:
+                        self.send_queue.put((SEND, IMAGE, image_data))
                 elif command == CAMERA and action == INFO:
                     details_data = self.camera.details()
-                    self.send_queue.put((SEND, INFO, details_data))
+                    if details_data is not None:
+                        self.send_queue.put((SEND, INFO, details_data))
                 else:
                     print "Not a request I can handle yet"
             except Queue.Empty:
@@ -346,4 +313,9 @@ camera = Camera()
 
 # camera.close()
 
-bluetooth_controller = BluetoothController(camera, interval=1, impulse_length=0.5)
+try:
+    bluetooth_controller = BluetoothController(camera, interval=1, impulse_length=30)
+except Exception:
+    pass
+finally:
+    camera.close()
