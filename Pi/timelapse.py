@@ -42,7 +42,7 @@ def find_connections():
     print lb.finddevicename(lb.gethostaddr())
     s = lb.socket()
     # Channel appears to need to be 1 for android to find it?
-    s.bind(("", 0))
+    s.bind(("", 2))
     print "About to listen"
     s.listen(10)
     print "About to advertise"
@@ -83,7 +83,7 @@ class BluetoothController(object):
                                                 self.interval, self.impulse_length)
         self.request_handler.register_stop(self.stop)
         self.request_handler.start()
-	self.request_handler.start_timelapse()
+        self.request_handler.start_timelapse()
         while not self.finished:
             try:
                 self.conn, self.addr, self.sock = find_connections()
@@ -108,7 +108,7 @@ class BluetoothController(object):
                 self.conn.close()
             except Exception:
                 print "Failed to close conn"
-           
+
         print "Closing socket"
         if self.sock is not None:
 	    try:
@@ -187,7 +187,7 @@ class BluetoothController(object):
         """Close the socket and indicate the loop should finish"""
         self.close_conn()
         self.finished = True
-	self.request_handler.stop()
+        self.request_handler.stop()
         print "Finished closing"
 
 class RequestHandler(threading.Thread):

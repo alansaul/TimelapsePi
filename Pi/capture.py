@@ -10,11 +10,11 @@ class Camera(object):
         self.proc = None
         self.last_photo = None
         self.storage_folder = folder
-	self.hook_script = hook_script
+        self.hook_script = hook_script
         self.latest_image_fname = latest_image_fname
         self.latest_exif_fname = latest_exif_fname
-	#self.filename = filename
-	#filename="capt%y%m%d%H%M%S.jpg",
+        #self.filename = filename
+        #filename="capt%y%m%d%H%M%S.jpg",
         self.lock = threading.RLock()
         self.setup_camera()
 
@@ -23,14 +23,14 @@ class Camera(object):
         print "Setting up"
         self.close()
         time.sleep(1)
-	#Set capture target as the memory card to reduce lag 
-	subprocess.Popen(["gphoto2", "--set-config", "capturetarget=1"])
-	time.sleep(1)
-	#Setup capture with interval -1 so it is waiting for SIGUSR1
+        #Set capture target as the memory card to reduce lag
+        subprocess.Popen(["gphoto2", "--set-config", "capturetarget=1"])
+        time.sleep(1)
+        #Setup capture with interval -1 so it is waiting for SIGUSR1
         #self.proc = subprocess.Popen(["gphoto2", "--capture-image", "-I", "-1", "&"])
-	self.proc = subprocess.Popen(["gphoto2", "--capture-image-and-download", "--keep", "-I", "-1", "--force-overwrite", "--filename", self.latest_image_fname, "--hook-script={}".format(self.hook_script), "&"])
-	
-	#"--filename={}".format(self.filename), 
+        self.proc = subprocess.Popen(["gphoto2", "--capture-image-and-download", "--keep", "-I", "-1", "--force-overwrite", "--filename", self.latest_image_fname, "--hook-script={}".format(self.hook_script), "&"])
+
+        #"--filename={}".format(self.filename),
         print "Pausing"
         time.sleep(1)
 
@@ -65,8 +65,8 @@ class Camera(object):
         # Call download image, then get the image as a Image file
         with self.lock:
             latest_image_bytes = None
-	    #out = subprocess.check_output(["gphoto2", "--folder={}".format(self.storage_folder), "-n"])
-	    #latest_image_fname_id = out.split(':')[-1].strip()
+            #out = subprocess.check_output(["gphoto2", "--folder={}".format(self.storage_folder), "-n"])
+            #latest_image_fname_id = out.split(':')[-1].strip()
             #subprocess.Popen(["gphoto2", "--folder={}".format(self.storage_folder), "--get-file", latest_image_fname_id])
             print "Getting last image"
             if os.path.isfile(self.latest_image_fname):
@@ -82,10 +82,10 @@ class Camera(object):
         # Get image capturing details
         with self.lock:
             print "Getting details"
-	    details = 'No info available'
+            details = 'No info available'
             if os.path.isfile(self.latest_image_fname):
                 with open(self.latest_exif_fname, 'r') as f:
-		    details = f.read()
+                    details = f.read()
             return details
 
 if __name__ == '__main__':
