@@ -41,10 +41,9 @@ def find_connections():
     print "Your address: ", lb.gethostaddr()
     print lb.finddevicename(lb.gethostaddr())
     s = lb.socket()
-    # Channel appears to need to be 1 for android to find it?
-    s.bind(("", 2))
+    s.bind(("", 2)) #RFCOMM port
     print "About to listen"
-    s.listen(10)
+    s.listen(1)
     print "About to advertise"
     lb.advertise("LightBlueService", s, lb.RFCOMM)
     print "Advertised at {} and listening on channel {}...".format(s.getsockname()[0], s.getsockname()[1])
@@ -295,7 +294,9 @@ class TimelapseThread(threading.Thread):
         """Send inpulse through GPIO"""
         with self.lock:
             print "Moving {}".format(self.direction)
+            #Send pulse
             time.sleep(self.impulse_length)
+            #Stop pulse
 
     def capture(self):
         """Capture"""
@@ -314,7 +315,7 @@ camera = Camera()
 # camera.close()
 
 try:
-    bluetooth_controller = BluetoothController(camera, interval=1, impulse_length=30)
+    bluetooth_controller = BluetoothController(camera, interval=1, impulse_length=5)
 except Exception:
     pass
 finally:
