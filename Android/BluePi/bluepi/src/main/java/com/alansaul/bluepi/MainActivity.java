@@ -39,6 +39,7 @@ public class MainActivity extends Activity {
     TextView detailsText;
 
     final int handlerState = 0;
+    final int port = 2; //Bluetooth SSP port
     private BluetoothAdapter btAdapter = null;
     private BluetoothSocket btSocket = null;
     private final String TAG="MAIN_THREAD";
@@ -338,7 +339,7 @@ public class MainActivity extends Activity {
                 //Sometimes the socket doesn't connect properly, this backup way sometimes works so try this, if not give up
                 try {
                     Log.d(TAG, "Failed to connect with existing socket, trying fallback socket connection");
-                    mmSocket = (BluetoothSocket) mmDevice.getClass().getMethod("createRfcommSocket", new Class[]{int.class}).invoke(mmDevice, 1);
+                    mmSocket = (BluetoothSocket) mmDevice.getClass().getMethod("createRfcommSocket", new Class[]{int.class}).invoke(mmDevice, port);
                     mmSocket.connect();
                     connected(mmSocket, mmDevice);
                 } catch (InvocationTargetException | NoSuchMethodException | IOException | IllegalAccessException e1) {
