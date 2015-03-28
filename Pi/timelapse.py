@@ -41,10 +41,9 @@ def find_connections():
     print "Your address: ", lb.gethostaddr()
     print lb.finddevicename(lb.gethostaddr())
     s = lb.socket()
-    # Channel appears to need to be 1 for android to find it?
-    s.bind(("", 0))
+    s.bind(("", 2)) #RFCOMM port
     print "About to listen"
-    s.listen(10)
+    s.listen(1)
     print "About to advertise"
     lb.advertise("LightBlueService", s, lb.RFCOMM)
     print "Advertised at {} and listening on channel {}...".format(s.getsockname()[0], s.getsockname()[1])
@@ -83,7 +82,7 @@ class BluetoothController(object):
                                                 self.interval, self.impulse_length)
         self.request_handler.register_stop(self.stop)
         self.request_handler.start()
-	self.request_handler.start_timelapse()
+        self.request_handler.start_timelapse()
         while not self.finished:
             try:
                 self.conn, self.addr, self.sock = find_connections()
@@ -108,7 +107,7 @@ class BluetoothController(object):
                 self.conn.close()
             except Exception:
                 print "Failed to close conn"
-           
+
         print "Closing socket"
         if self.sock is not None:
 	    try:
@@ -187,7 +186,7 @@ class BluetoothController(object):
         """Close the socket and indicate the loop should finish"""
         self.close_conn()
         self.finished = True
-	self.request_handler.stop()
+        self.request_handler.stop()
         print "Finished closing"
 
 class RequestHandler(threading.Thread):
@@ -295,7 +294,9 @@ class TimelapseThread(threading.Thread):
         """Send inpulse through GPIO"""
         with self.lock:
             print "Moving {}".format(self.direction)
+            #Send pulse
             time.sleep(self.impulse_length)
+            #Stop pulse
 
     def capture(self):
         """Capture"""
@@ -314,7 +315,7 @@ camera = Camera()
 # camera.close()
 
 try:
-    bluetooth_controller = BluetoothController(camera, interval=1, impulse_length=30)
+    bluetooth_controller = BluetoothController(camera, interval=1, impulse_length=5)
 except Exception:
     pass
 finally:
