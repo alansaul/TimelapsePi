@@ -12,7 +12,13 @@
         android:id="@+id/info_text"
         android:text="@string/hello_world"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content" />
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentStart="true"
+        android:layout_toStartOf="@+id/stopBtn"
+        android:layout_toLeftOf="@+id/stopBtn"
+        android:minLines="3" />
 
     <Button
         android:layout_width="wrap_content"
@@ -42,8 +48,9 @@
         android:layout_below="@+id/startBtn"
         android:layout_alignParentLeft="true"
         android:layout_alignParentStart="true"
-        android:layout_alignRight="@+id/latestView"
-        android:layout_alignEnd="@+id/latestView" />
+        android:layout_toStartOf="@+id/settingsBtn"
+        android:layout_alignRight="@+id/settingsBtn"
+        android:layout_alignEnd="@+id/settingsBtn" />
 
     <ImageView
         android:layout_width="325dp"
@@ -66,9 +73,9 @@
         android:layout_height="wrap_content"
         android:text="Camera Details"
         android:id="@+id/cameraDetailBtn"
-        android:layout_below="@+id/startBtn"
-        android:layout_alignLeft="@+id/latestView"
-        android:layout_alignStart="@+id/latestView" />
+        android:layout_alignTop="@+id/imageBtn"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentStart="true" />
 
     <Button
         android:layout_width="wrap_content"
@@ -76,17 +83,39 @@
         android:text="Get Image"
         android:id="@+id/imageBtn"
         android:layout_below="@+id/shutdownBtn"
-        android:layout_alignRight="@+id/latestView"
-        android:layout_alignEnd="@+id/latestView" />
+        android:layout_toEndOf="@+id/cameraDetailBtn" />
 
     <ImageView
         android:layout_width="@android:dimen/app_icon_size"
         android:layout_height="@android:dimen/app_icon_size"
         android:id="@+id/statusView"
-        android:layout_above="@+id/shutdownBtn"
         android:layout_alignRight="@+id/shutdownBtn"
         android:layout_alignEnd="@+id/shutdownBtn"
-        android:layout_alignTop="@+id/info_text" />
+        android:layout_alignTop="@+id/info_text"
+        android:layout_alignBottom="@+id/info_text" />
+
+    <Button
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Settings"
+        android:id="@+id/settingsBtn"
+        android:layout_alignBottom="@+id/imageBtn"
+        android:layout_toRightOf="@+id/imageBtn"
+        android:layout_toEndOf="@+id/imageBtn"
+        android:layout_alignTop="@+id/imageBtn" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Settings info:"
+        android:id="@+id/settingsView"
+        android:layout_alignTop="@+id/statusView"
+        android:layout_alignLeft="@+id/imageBtn"
+        android:layout_alignStart="@+id/imageBtn"
+        android:layout_toLeftOf="@+id/statusView"
+        android:layout_toStartOf="@+id/statusView"
+        android:minLines="3"
+        android:layout_above="@+id/startBtn" />
 
 
 </RelativeLayout>

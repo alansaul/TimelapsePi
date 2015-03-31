@@ -9,7 +9,6 @@ import android.content.Context;
 import android.content.IntentFilter;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.PorterDuff;
 import android.os.Message;
 import android.os.ParcelUuid;
 import android.os.Bundle;
@@ -35,11 +34,20 @@ import java.util.Arrays;
 import java.util.UUID;
 
 public class MainActivity extends Activity {
+    public static final String PREFS_NAME = "BluePiPrefs";
+
+    public static final int SETTINGS_REQUEST = 1;
+
+    TextView settingsText;
     TextView infoText;
     TextView detailsText;
 
-    final int handlerState = 0;
-    final int port = 2; //Bluetooth SSP port
+    int filmDurationMinutes;
+    int footageSeconds;
+    int percent;
+    int length;
+
+    final int port = 1; //Bluetooth SSP port
     private BluetoothAdapter btAdapter = null;
     private BluetoothSocket btSocket = null;
     private final String TAG="MAIN_THREAD";
@@ -48,14 +56,16 @@ public class MainActivity extends Activity {
     private final String MOVE = "MOVE";
     private final String CAMERA = "CAMERA";
 
-    private final String LEFT = "LEFT";
-    private final String RIGHT = "RIGHT";
+    //private final String LEFT = "LEFT";
+    //private final String RIGHT = "RIGHT";
     private final String START = "START";
     private final String SHUTDOWN = "SHUTDOWN";
+    private final String SETTINGS_CHANGE = "SETTINGS_CHANGE";
     private final String STOP = "STOP";
     private final String INFO = "INFO";
     private final String IMAGE = "IMAGE";
-
+    private final String[] EMPTY_DATA = {};
+    private String[] SETTINGS_DATA;
 
     // SPP UUID service - this should work for most devices
     private static final UUID BTMODULEUUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"); //Seems to work with lightblue
@@ -141,6 +151,10 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        //Get timelapse settings
+        Intent settingsRequestIntent = new Intent(MainActivity.this, SettingsActivity.class);
+        startActivityForResult(settingsRequestIntent, SETTINGS_REQUEST);
     }
 
     @Override
@@ -184,6 +198,7 @@ public class MainActivity extends Activity {
         Button stopBtn = (Button) findViewById(R.id.stopBtn);
         Button detailsBtn = (Button) findViewById(R.id.cameraDetailBtn);
         Button imageBtn = (Button) findViewById(R.id.imageBtn);
+        Button settingsBtn = (Button) findViewById(R.id.settingsBtn);
         detailsText = (TextView) findViewById(R.id.cameraDetails);
         detailsText.setText("No Details yet");
         latestView = (ImageView) findViewById(R.id.latestView);
@@ -195,47 +210,89 @@ public class MainActivity extends Activity {
         startBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                sendCommand(REQUEST, START);
+                sendCommand(REQUEST, SETTINGS_CHANGE, SETTINGS_DATA);
+                sendCommand(REQUEST, START, EMPTY_DATA);
             }
         });
 
         stopBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                sendCommand(REQUEST, STOP);
+                sendCommand(REQUEST, STOP, EMPTY_DATA);
             }
         });
 
         shutdownBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                sendCommand(REQUEST, SHUTDOWN);
+                sendCommand(REQUEST, SHUTDOWN, EMPTY_DATA);
             }
         });
-
 
         detailsBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                sendCommand(CAMERA, INFO);
+                sendCommand(CAMERA, INFO, EMPTY_DATA);
             }
         });
 
         imageBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                sendCommand(CAMERA, IMAGE);
+                sendCommand(CAMERA, IMAGE, EMPTY_DATA);
             }
         });
+        settingsBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Log.d(TAG, "Opening settings");
+                Intent settingsChangeIntent = new Intent(MainActivity.this, SettingsActivity.class);
+                startActivityForResult(settingsChangeIntent, SETTINGS_REQUEST);
+            }
+        });
+
+        settingsText = (TextView) findViewById(R.id.settingsView);
+        settingsText.setTextSize(15);
     }
 
-    private void sendCommand(String command, String action){
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data){
+        super.onActivityResult(requestCode, resultCode, data);
+        switch(requestCode){
+            case SETTINGS_REQUEST : {
+                if (resultCode == Activity.RESULT_OK){
+                    Log.d(TAG, "Got some settings");
+                    filmDurationMinutes = data.getIntExtra(SettingsActivity.FILMDURATION, 31);
+                    footageSeconds = data.getIntExtra(SettingsActivity.FOOTAGESECONDS, 21);
+                    percent = data.getIntExtra(SettingsActivity.PERCENT, 1);
+                    length = data.getIntExtra(SettingsActivity.LENGTH, 151);
+                    SETTINGS_DATA = new String[3];
+                    SETTINGS_DATA[0] = Integer.toString(filmDurationMinutes);
+                    SETTINGS_DATA[1] = Integer.toString(percent);
+                    SETTINGS_DATA[2] = Integer.toString(length);
+                    Log.d(TAG, Integer.toString(filmDurationMinutes));
+                    Log.d(TAG, Integer.toString(percent));
+                    Log.d(TAG, Integer.toString(length));
+                    settingsText.setText("Minutes: " + filmDurationMinutes + "\n" + "Percent: " + percent + "\n" + "Length: " + length);
+                }
+                break;
+                }
+        }
+
+    }
+
+    private void sendCommand(String command, String action, String[] data){
         //Take a command and action and send it through bluetooth to the server
         Log.d(TAG, "Sending command");
         if (mConnectedThread != null && mConnectedThread.streamReady){
             //Form command
             updateStatusText.obtainMessage(UPDATE_TEXT, "Requesting " + command + " " + action).sendToTarget();
             String fullCommand = command + "#" + action;
+            if (data.length > 0){
+                for (int i=0; i<data.length; i++){
+                    fullCommand += '#' + data[i];
+                }
+            }
             Log.d(TAG, fullCommand);
             mConnectedThread.write(fullCommand.getBytes());
         }else{
@@ -464,6 +521,7 @@ public class MainActivity extends Activity {
                 }
                 Log.d(TAG, String.format("Got %d bytes so far", bytesReceived));
             }
+            outFile.flush();
             Log.d(TAG, String.format("Received all %d bytes", bytesReceived));
             latestViewHandler.obtainMessage(UPDATE_IMAGE, currentImage.getAbsolutePath()).sendToTarget();
             updateStatusText.obtainMessage(UPDATE_TEXT, "Image received").sendToTarget();
@@ -474,6 +532,7 @@ public class MainActivity extends Activity {
             Log.d(TAG, String.valueOf(bytes.length));
             try{
                 mmOutput.write(bytes);
+                mmOutput.flush();
             } catch (IOException e) {
                 e.printStackTrace();
                 Log.d(TAG, "Failed to write bytes");
@@ -498,5 +557,7 @@ public class MainActivity extends Activity {
         public synchronized void stopThread(){
             stop=true;
         }
+
+
     }
 }

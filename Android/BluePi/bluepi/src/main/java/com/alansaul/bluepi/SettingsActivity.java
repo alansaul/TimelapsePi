@@ -1,0 +1,235 @@
+package com.alansaul.bluepi;
+
+import android.app.Activity;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.support.v7.app.ActionBarActivity;
+import android.os.Bundle;
+import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
+import android.view.View;
+import android.widget.Button;
+import android.widget.NumberPicker;
+
+
+public class SettingsActivity extends ActionBarActivity {
+    private final String TAG="SETTINGS_THREAD";
+
+    NumberPicker shutterspeedPicker;
+    NumberPicker durationPicker;
+    NumberPicker secondsPicker;
+    NumberPicker percentPicker;
+    NumberPicker lengthPicker;
+
+    int footageSeconds; //How many seconds of footage we want
+    int filmingDurationMinutes; //How many seconds of footage we want
+    int percentComplete;
+    int barLengthCM;
+    float shutterspeed;
+    int interval;
+    int delay;
+
+    public static final String INTERVAL = "INTERVAL";
+    public static final String DELAY = "DELAY";
+    public static final String FILMDURATION = "FILMDURATION";
+    public static final String FOOTAGESECONDS = "FOOTAGESECONDS";
+    public static final String SHUTTERSPEED= "SHUTTERSPEED";
+    public static final String PERCENT = "PERCENT";
+    public static final String LENGTH = "LENGTH";
+    public static final String PREFS_NAME = "BluePiPrefs";
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_settings);
+
+        SharedPreferences settings = getSharedPreferences(PREFS_NAME, 0);
+        footageSeconds = settings.getInt("footageSeconds", 20);
+        filmingDurationMinutes = settings.getInt("filmDurationMinutes", 30);
+        shutterspeed = settings.getFloat("shutterspeed", 1.0f);
+        percentComplete = settings.getInt("percentComplete", 0);
+        barLengthCM = settings.getInt("barLengthCM", 150);
+        interval = settings.getInt("interval", 3333);
+        delay = settings.getInt("delay", 400);
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        secondsPicker = (NumberPicker) findViewById(R.id.secondsPicker);
+        durationPicker = (NumberPicker) findViewById(R.id.durationPicker);
+        shutterspeedPicker= (NumberPicker) findViewById(R.id.shutterspeedPicker);
+        percentPicker = (NumberPicker) findViewById(R.id.percentPicker);
+        lengthPicker = (NumberPicker) findViewById(R.id.lengthPicker);
+
+        secondsPicker.setMinValue(1);
+        secondsPicker.setMaxValue(60);
+
+        durationPicker.setMinValue(1);
+        durationPicker.setMaxValue(5000);
+
+        String[] values=new String[3];
+        values[0]="1/250";
+        values[1]="1/3";
+        values[2]="1\"";
+        shutterspeedPicker.setMaxValue(values.length-1);
+        shutterspeedPicker.setMinValue(0);
+
+        percentPicker.setMinValue(0);
+        percentPicker.setMaxValue(100);
+
+        lengthPicker.setMinValue(10);
+        lengthPicker.setMaxValue(300);
+
+        SharedPreferences settings = getSharedPreferences(PREFS_NAME, 0);
+        filmingDurationMinutes = settings.getInt("filmingDurationMinutes", 60);
+        footageSeconds = settings.getInt("footageSeconds", 60);
+        shutterspeed = settings.getFloat("shutterspeed", 1.0f);
+        percentComplete = settings.getInt("percentComplete", 0);
+        barLengthCM = settings.getInt("barLengthCM", 150);
+
+        secondsPicker.setValue(footageSeconds);
+        durationPicker.setValue(filmingDurationMinutes);
+        shutterspeedPicker.setDisplayedValues(values);
+        percentPicker.setValue(percentComplete);
+        lengthPicker.setValue(barLengthCM);
+
+        Button updateBtn = (Button) findViewById(R.id.updateBtn);
+
+        updateBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                saveSettings();
+                returnSettings();
+            }
+        });
+    }
+
+    public void onBackPressed(){
+        returnSettings();
+        super.onBackPressed();
+    }
+
+    protected void returnSettings(){
+        Settings settings = calculate_required_settings();
+
+        Intent resultIntent = new Intent();
+        resultIntent.putExtra(FILMDURATION, filmingDurationMinutes);
+        resultIntent.putExtra(FOOTAGESECONDS, footageSeconds);
+        resultIntent.putExtra(SHUTTERSPEED, shutterspeed);
+        resultIntent.putExtra(PERCENT, percentComplete);
+        resultIntent.putExtra(LENGTH, barLengthCM);
+        resultIntent.putExtra(INTERVAL, interval);
+        resultIntent.putExtra(DELAY, delay);
+        setResult(Activity.RESULT_OK, resultIntent);
+        finish();
+    }
+
+    private Settings calculate_required_settings(){
+        SharedPreferences settings = getSharedPreferences(PREFS_NAME, 0);
+        filmingDurationMinutes = settings.getInt("filmingDurationMinutes", 30);
+        footageSeconds = settings.getInt("footageSeconds", 20);
+        shutterspeed = settings.getFloat("shutterspeed", 1.0f);
+        percentComplete = settings.getInt("percentComplete", 0);
+        barLengthCM = settings.getInt("barLengthCM", 150);
+        interval = settings.getInt("interval", 3333);
+        delay = settings.getInt("delay", 400);
+
+        Log.d(TAG, Integer.toString(filmingDurationMinutes));
+        Log.d(TAG, Integer.toString(footageSeconds));
+        Log.d(TAG, Float.toString(shutterspeed));
+        Log.d(TAG, Integer.toString(percentComplete));
+        Log.d(TAG, Integer.toString(barLengthCM));
+
+        int framerate = 24; // Normal framerate
+        // Say it takes 0.5 seconds to respond to a request to take a photo
+        double responseTime = 0.5;
+
+        int numPhotos = footageSeconds * framerate;
+        double secondsRequiredPerPhoto = shutterspeed + responseTime;
+        double totalCaptureTimeSeconds = secondsRequiredPerPhoto * numPhotos;
+        double timeLeft = filmingDurationMinutes*60 - totalCaptureTimeSeconds;
+
+        int RPM = 15;
+        double circumference= 3; //in CM
+        double CMPerMinute = RPM*circumference;
+        double CMLeft = barLengthCM*((100-percentComplete)/100);
+        double movingSecondsRequired = (CMLeft/CMPerMinute)*60;
+
+        double secondsGivenPerPhoto = (filmingDurationMinutes * 60 - movingSecondsRequired);
+
+        //Sanity check
+        Log.d(TAG, "Calculating interval");
+        Log.d(TAG, "Seconds required per photo: " + secondsRequiredPerPhoto);
+        Log.d(TAG, "Overall photos to take: " + numPhotos);
+        Log.d(TAG, "Number of footageMinutes just to take photos " + (numPhotos * secondsRequiredPerPhoto)/60);
+        Log.d(TAG, "timeLeft filmDurationMinutes " + Double.toString(timeLeft / 60));
+        Log.d(TAG, "Moving filmDurationMinutes required: " + Double.toString(movingSecondsRequired/60));
+        Log.d(TAG, "Enough time to atleast take photos " + (timeLeft > movingSecondsRequired));
+
+        if (timeLeft > movingSecondsRequired) {
+            delay = (int) Math.round(movingSecondsRequired * 1000 / numPhotos); //In ms
+            interval = (int) Math.round(secondsGivenPerPhoto * 1000 / numPhotos); //In ms
+            Log.d(TAG, "Interval and delay changed");
+        }
+
+        Log.d(TAG, "Interval: " + Integer.toString(interval));
+        Log.d(TAG, "Delay: " + Integer.toString(delay));
+
+        Settings s = new Settings();
+        s.barLength = barLengthCM;
+        s.footageSeconds = footageSeconds;
+        s.filmingDurationMinutes = filmingDurationMinutes;
+        s.shutterspeed = shutterspeed;
+        s.percentageComplete = percentComplete;
+        s.delay = delay;
+        s.interval = interval;
+        return s;
+    }
+
+    protected void saveSettings(){
+        SharedPreferences settings = getSharedPreferences(PREFS_NAME, 0);
+        SharedPreferences.Editor editor = settings.edit();
+
+        footageSeconds = secondsPicker.getValue();
+        percentComplete = percentPicker.getValue();
+        barLengthCM = lengthPicker.getValue();
+
+        if (footageSeconds > 0) {
+            editor.putInt("footageSeconds", footageSeconds);
+        }
+        if ((percentComplete >= 0) && (percentComplete <= 100)){
+            editor.putInt("percentComplete", percentComplete);
+        }
+        if (barLengthCM >= 10){
+            editor.putInt("barLengthCM", barLengthCM);
+        }
+
+        //Commit the settings
+        editor.commit();
+    }
+
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        // Inflate the menu; this adds items to the action bar if it is present.
+        getMenuInflater().inflate(R.menu.menu_settings, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        // Handle action bar item clicks here. The action bar will
+        // automatically handle clicks on the Home/Up button, so long
+        // as you specify a parent activity in AndroidManifest.xml.
+        int id = item.getItemId();
+
+        //noinspection SimplifiableIfStatement
+        if (id == R.id.action_settings) {
+            return true;
+        }
+
+        return super.onOptionsItemSelected(item);
+    }
+}

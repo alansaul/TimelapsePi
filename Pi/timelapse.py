@@ -1,8 +1,4 @@
 import lightblue as lb
-from subprocess import call
-import subprocess
-import signal
-import os
 import time
 import threading
 import Queue
@@ -24,7 +20,8 @@ LEFT = 'LEFT'
 RIGHT = 'RIGHT'
 INFO = 'INFO'
 IMAGE = 'IMAGE'
-ACTIONS = [START, STOP, SHUTDOWN, LEFT, RIGHT, INFO, IMAGE]
+SETTINGS_CHANGE= 'SETTINGS_CHANGE'
+ACTIONS = [START, STOP, SHUTDOWN, LEFT, RIGHT, INFO, IMAGE, SETTINGS_CHANGE]
 
 with open("lol_cat.jpg", "rb") as imageFile:
     image_bytes = bytearray(imageFile.read())
@@ -41,7 +38,8 @@ def find_connections():
     print "Your address: ", lb.gethostaddr()
     print lb.finddevicename(lb.gethostaddr())
     s = lb.socket()
-    s.bind(("", 2)) #RFCOMM port
+    s.bind(("", 0))  # RFCOMM port
+    # s.bind(("", 2))  # RFCOMM port
     print "About to listen"
     s.listen(1)
     print "About to advertise"
@@ -52,6 +50,7 @@ def find_connections():
     try:
         conn, addr = s.accept()
     except KeyboardInterrupt:
+        print "Closing connection due to keyboard intterupt"
         s.close()
         raise KeyboardInterrupt
     # Set timeout for 1 second
@@ -59,11 +58,12 @@ def find_connections():
     print "Connected by", addr
     return conn, addr, s
 
+
 class BluetoothController(object):
-    def __init__(self, camera, interval=1, impulse_length=30):
+    def __init__(self, camera, interval=1, pulse_length=30):
         self.camera = camera
         self.interval = interval
-        self.impulse_length = impulse_length
+        self.pulse_length = pulse_length
         # Threadsafe requests handling between threads using queue
         self.request_queue = Queue.Queue()
         self.send_queue = Queue.Queue()
@@ -78,19 +78,21 @@ class BluetoothController(object):
         Thus much of this logic belongs in the bluetooth thread
         """
         print "Starting BluetoothController"
-        self.request_handler = RequestHandler(self.request_queue, self.send_queue, self.camera,
-                                                self.interval, self.impulse_length)
+        self.request_handler = RequestHandler(self.request_queue, self.send_queue,
+                                              self.camera, self.interval, self.pulse_length)
         self.request_handler.register_stop(self.stop)
         self.request_handler.start()
-        self.request_handler.start_timelapse()
+        #self.request_handler.start_timelapse()
         while not self.finished:
             try:
                 self.conn, self.addr, self.sock = find_connections()
                 self.conn.settimeout(1)
                 self.send_receive()
             except KeyboardInterrupt:
+                print "Keyboard interrupt, stopping"
                 self.stop()
             except socket_mod.error, e:
+                print "Yelp! stopping"
                 print e
                 self.close_conn()
 
@@ -99,22 +101,22 @@ class BluetoothController(object):
     def close_conn(self):
         print "Closing connection"
         if self.conn is not None:
-	    try:
+            try:
                 self.conn.shutdown(socket_mod.SHUT_RDWR)
             except Exception:
-	        print "Failed to shutdown conn"
-	    try:
+                print "Failed to shutdown conn"
+            try:
                 self.conn.close()
             except Exception:
                 print "Failed to close conn"
 
         print "Closing socket"
         if self.sock is not None:
-	    try:
+            try:
                 self.sock.shutdown(socket_mod.SHUT_RDWR)
             except Exception:
-	        print "Failed to shutdown sock"
-	    try:
+                print "Failed to shutdown sock"
+            try:
                 self.sock.close()
             except Exception:
                 print "Failed to close sock"
@@ -123,10 +125,12 @@ class BluetoothController(object):
     def send_receive(self):
         while not self.finished:
             try:
-                #Should use select here to avoid a delay in handling sends, lightblue
-                #does not implement fileno though in its sockets... sigh. Switch to
-                #pybluez when using linux (refactor accordingly as bluetooth will
-                #probably be possible to run in a thread aswell.)
+                """
+                Should use select here to avoid a delay in handling sends, lightblue
+                does not implement fileno though in its sockets... sigh. Switch to
+                pybluez when using linux (refactor accordingly as bluetooth will
+                probably be possible to run in a thread aswell.)
+                """
                 command_str = self.conn.recv(1024)
                 self.perform_command(command_str)
                 self.perform_send()
@@ -135,7 +139,6 @@ class BluetoothController(object):
                 # print "Timed out, no requests came in"
                 pass
             finally:
-                # print "Handling any sending requests"
                 self.perform_send()
 
     def perform_send(self):
@@ -158,7 +161,7 @@ class BluetoothController(object):
             self.conn.send(image_str)
             print "Sent image"
         elif action == INFO:
-            #details = "these, are, some, details"
+            # details = "these, are, some, details"
             details = data
             data = CAMERA + "#" + INFO + "#" + details
             print "Sending details"
@@ -169,18 +172,23 @@ class BluetoothController(object):
         print "Received command: {}".format(command_str)
         commands = command_str.split('#')
         if len(commands) == 2:
-            command, action = commands
             data = None
-            if command in COMMANDS and action in ACTIONS:
-                self.request_queue.put((command, action, data))
-            else:
-                print "Corrupt action"
+        elif len(commands) > 2:
+            data = commands[2:]
         elif command_str == '':
-            #Gets received when the server socket is closed (should be -1)
+            # Gets received when the server socket is closed (should be -1)
             print "Command suggests socket is being closed, ignore this command and close the socket"
             self.stop()
         else:
             print "Not a command, must be of form COMMAND#ACTION: {}".format(command_str)
+
+        if len(commands) >= 2:
+            command = commands[0]
+            action = commands[1]
+            if command in COMMANDS and action in ACTIONS:
+                self.request_queue.put((command, action, data))
+            else:
+                print "Corrupt action"
 
     def stop(self):
         """Close the socket and indicate the loop should finish"""
@@ -189,19 +197,22 @@ class BluetoothController(object):
         self.request_handler.stop()
         print "Finished closing"
 
+
 class RequestHandler(threading.Thread):
-    def __init__(self, request_queue, send_queue, camera, interval, impulse_length):
+    def __init__(self, request_queue, send_queue, camera, interval, pulse_length):
         threading.Thread.__init__(self)
         self.request_queue = request_queue
         self.send_queue = send_queue
         self.camera = camera
         self.interval = interval
-        self.impulse_length = impulse_length
+        self.pulse_length = pulse_length
         self.thread_num = 1
         self.timelapse_thread = None
         self.finished = False
         self.stop_callbacks = []
         self.setDaemon(True)
+        # 24 photos in a second of video, so 1440 photos in a minute
+        self.photos_per_second = 1440
 
     def run(self):
         while not self.finished:
@@ -228,6 +239,8 @@ class RequestHandler(threading.Thread):
                     details_data = self.camera.details()
                     if details_data is not None:
                         self.send_queue.put((SEND, INFO, details_data))
+                elif command == REQUEST and action == SETTINGS_CHANGE:
+                    self.change_settings(data)
                 else:
                     print "Not a request I can handle yet"
             except Queue.Empty:
@@ -236,6 +249,60 @@ class RequestHandler(threading.Thread):
         for callback in self.stop_callbacks:
             callback()
 
+    def change_settings(self, data):
+        """
+        Theres been a change of settings, next time the timelapse
+        is started these settings will be used
+        """
+        if len(data) == 3:
+            try:
+                minutes = int(data[0])
+                percent = int(data[1])
+                length = int(data[2])
+                shutterspeed = 1./250  # FIXME: Need to get this from the camera
+            except Exception, e:
+                print "Something wrong with input data"
+                print e
+            try:
+                interval, pulse_width = self.calculate_interval(minutes, percent, length, shutterspeed)
+                print "Changing interval to {} and pulsewidth to {} seconds".format(interval, pulse_width)
+                self.interval = interval
+                self.pulse_width = pulse_width
+            except ValueError, e:
+                print e
+            except AssertionError, e:
+                print e
+        else:
+            print "It seems some settings were missing, ignoring change"
+
+    def calculate_interval(self, minutes, percent, length, shutterspeed):
+        """
+        Calculate the interval (delay) and pulse length (distance) given settings
+        """
+        print "Calculating interval"
+        num_photos = 60 * minutes * self.photos_per_second
+        # Say it takes 0.5 seconds to respond to a request to take a photo
+        response_time = 0.5
+        photos_per_second = shutterspeed + response_time
+        capture_time_seconds = photos_per_second*num_photos
+        print "Seconds per photo: ", photos_per_second
+        print "Overall photos to take: ", num_photos
+        print "Number of minutes just to take photos", (capture_time_seconds)/float(60)
+        # Sanity check that it is possible to have this shutterspeed and length combination
+        left_over_seconds = float(minutes*60 - capture_time_seconds)
+        print "{} left over seconds out of {}".format(left_over_seconds, minutes*60)
+        if left_over_seconds > 0:
+            pulse_length = left_over_seconds / num_photos
+            interval = photos_per_second
+            # Sanity check that our maths is right
+            timelapse_length_minutes = ((pulse_length + interval)*num_photos)/60.0
+            print "Timelapse will take {} minutes".format(timelapse_length_minutes)
+            assert timelapse_length_minutes < minutes
+            assert timelapse_length_minutes > minutes/2.0
+            return interval, pulse_length
+        else:
+            raise ValueError("Not enough seconds to use make this timelapse")
+
     def shutdown_pi(self):
         """Shutdown Pi gracefully"""
         print "Shutting down Pi"
@@ -243,17 +310,19 @@ class RequestHandler(threading.Thread):
 
     def start_timelapse(self):
         """Start timelapse, in thread"""
+        print "Starting timelapse thread"
         if self.timelapse_thread is not None:
             self.timelapse_thread.stop()
             time.sleep(5)
         self.timelapse_thread = TimelapseThread("Timelapse thread: {}".format(self.thread_num),
-                                                self.camera, self.interval, self.impulse_length,
+                                                self.camera, self.interval, self.pulse_length,
                                                 self.request_queue)
         self.timelapse_thread.start()
         self.thread_num = self.thread_num + 1
 
     def stop_timelapse(self):
         """End timelapse thread"""
+        print "Stopping timelapse thread"
         if self.timelapse_thread is not None:
             self.timelapse_thread.stop()
 
@@ -261,18 +330,18 @@ class RequestHandler(threading.Thread):
         print "Stopping thread"
         self.stop_timelapse()
         self.finished = True
-        #print "Still stopping thread"
+        print "Still stopping thread"
 
     def register_stop(self, callback):
         self.stop_callbacks.append(callback)
 
 
 class TimelapseThread(threading.Thread):
-    def __init__(self, name, camera, interval, impulse_length, request_queue):
+    def __init__(self, name, camera, interval, pulse_length, request_queue):
         threading.Thread.__init__(self)
         self.camera = camera
         self.interval = interval
-        self.impulse_length = impulse_length
+        self.pulse_length = pulse_length
         self.lock = threading.RLock()
         self.finished = False
         self.request_queue = request_queue
@@ -283,7 +352,7 @@ class TimelapseThread(threading.Thread):
         while not self.finished:
             self.move()
             # Wait for correct amount of time
-            time.sleep(self.impulse_length)
+            time.sleep(self.pulse_length)
             self.capture()
 
     def stop(self):
@@ -293,30 +362,36 @@ class TimelapseThread(threading.Thread):
     def move(self):
         """Send inpulse through GPIO"""
         with self.lock:
-            print "Moving {}".format(self.direction)
-            #Send pulse
-            time.sleep(self.impulse_length)
-            #Stop pulse
+            print "Moving {} for {} seconds".format(self.direction, self.pulse_length)
+            # Send pulse
+            time.sleep(self.pulse_length)
+            # Stop pulse
 
     def capture(self):
         """Capture"""
         with self.lock:
             self.camera.capture()
+            # Wait amount of time for image to be captured
+            time.sleep(self.interval)
 
 
 # print "Setting up gphoto"
 camera = Camera()
+"""
 # print "Taking photos"
 # for i in range(5):
     # camera.capture()
     # print "Taken photo ", i
     # time.sleep(5)
+"""
 
 # camera.close()
 
+# bluetooth_controller = BluetoothController(camera, interval=1, pulse_length=5)
 try:
-    bluetooth_controller = BluetoothController(camera, interval=1, impulse_length=5)
-except Exception:
-    pass
+    bluetooth_controller = BluetoothController(camera, interval=1, pulse_length=5)
+except Exception, e:
+    print "Something went horribly wrong"
+    print e
 finally:
     camera.close()
