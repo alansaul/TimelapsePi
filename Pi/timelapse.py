@@ -38,8 +38,9 @@ def find_connections():
     print "Your address: ", lb.gethostaddr()
     print lb.finddevicename(lb.gethostaddr())
     s = lb.socket()
-    s.bind(("", 0))  # RFCOMM port
-    # s.bind(("", 2))  # RFCOMM port
+    #s.bind(("", 0))  # RFCOMM port
+    #s.bind(("", 1))  # RFCOMM port
+    s.bind(("", 2))  # RFCOMM port
     print "About to listen"
     s.listen(1)
     print "About to advertise"
@@ -261,61 +262,10 @@ class RequestHandler(threading.Thread):
                 print "Something wrong with input data"
                 print e
             self.interval = interval
-            self.pulse_width = delay
+            self.pulse_length = delay
             #FIXME: Set the shutterspeed
         else:
             print "It seems some settings were missing, ignoring change"
-
-    """
-    def change_settings(self, data):
-        #Theres been a change of settings, next time the timelapse is started these settings will be used
-        if len(data) == 3:
-            try:
-                minutes = int(data[0])
-                percent = int(data[1])
-                length = int(data[2])
-                shutterspeed = 1./250  # FIXME: Need to get this from the camera
-            except Exception, e:
-                print "Something wrong with input data"
-                print e
-            try:
-                interval, pulse_width = self.calculate_interval(minutes, percent, length, shutterspeed)
-                print "Changing interval to {} and pulsewidth to {} seconds".format(interval, pulse_width)
-                self.interval = interval
-                self.pulse_width = pulse_width
-            except ValueError, e:
-                print e
-            except AssertionError, e:
-                print e
-        else:
-            print "It seems some settings were missing, ignoring change"
-
-    def calculate_interval(self, minutes, percent, length, shutterspeed):
-        #Calculate the interval (delay) and pulse length (distance) given settings
-        print "Calculating interval"
-        num_photos = 60 * minutes * self.photos_per_second
-        # Say it takes 0.5 seconds to respond to a request to take a photo
-        response_time = 0.5
-        photos_per_second = shutterspeed + response_time
-        capture_time_seconds = photos_per_second*num_photos
-        print "Seconds per photo: ", photos_per_second
-        print "Overall photos to take: ", num_photos
-        print "Number of minutes just to take photos", (capture_time_seconds)/float(60)
-        # Sanity check that it is possible to have this shutterspeed and length combination
-        left_over_seconds = float(minutes*60 - capture_time_seconds)
-        print "{} left over seconds out of {}".format(left_over_seconds, minutes*60)
-        if left_over_seconds > 0:
-            pulse_length = left_over_seconds / num_photos
-            interval = photos_per_second
-            # Sanity check that our maths is right
-            timelapse_length_minutes = ((pulse_length + interval)*num_photos)/60.0
-            print "Timelapse will take {} minutes".format(timelapse_length_minutes)
-            assert timelapse_length_minutes < minutes
-            assert timelapse_length_minutes > minutes/2.0
-            return interval, pulse_length
-        else:
-            raise ValueError("Not enough seconds to use make this timelapse")
-    """
 
     def shutdown_pi(self):
         """Shutdown Pi gracefully"""
@@ -327,6 +277,7 @@ class RequestHandler(threading.Thread):
         print "Starting timelapse thread"
         if self.timelapse_thread is not None:
             self.timelapse_thread.stop()
+            self.timelapse_thread = None
             time.sleep(5)
         self.timelapse_thread = TimelapseThread("Timelapse thread: {}".format(self.thread_num),
                                                 self.camera, self.interval, self.pulse_length,
@@ -339,6 +290,7 @@ class RequestHandler(threading.Thread):
         print "Stopping timelapse thread"
         if self.timelapse_thread is not None:
             self.timelapse_thread.stop()
+            self.timelapse_thread = None
 
     def stop(self):
         print "Stopping thread"
@@ -365,8 +317,6 @@ class TimelapseThread(threading.Thread):
         """Run timelapse"""
         while not self.finished:
             self.move()
-            # Wait for correct amount of time
-            time.sleep(self.pulse_length)
             self.capture()
 
     def stop(self):
@@ -376,17 +326,18 @@ class TimelapseThread(threading.Thread):
     def move(self):
         """Send inpulse through GPIO"""
         with self.lock:
-            print "Moving {} for {} seconds".format(self.direction, self.pulse_length)
+            print "Moving {} for {} milliseconds".format(self.direction, self.pulse_length)
             # Send pulse
-            time.sleep(self.pulse_length)
+            time.sleep(self.pulse_length / 1000.0)
             # Stop pulse
 
     def capture(self):
         """Capture"""
         with self.lock:
+            print "Capturing and waitig over {} milliseconds".format(self.interval)
             self.camera.capture()
             # Wait amount of time for image to be captured
-            time.sleep(self.interval)
+            time.sleep(self.interval / 1000.0)
 
 
 # print "Setting up gphoto"
@@ -403,7 +354,7 @@ camera = Camera()
 
 # bluetooth_controller = BluetoothController(camera, interval=1, pulse_length=5)
 try:
-    bluetooth_controller = BluetoothController(camera, interval=1, pulse_length=5)
+    bluetooth_controller = BluetoothController(camera, interval=1000, pulse_length=5000)
 except Exception, e:
     print "Something went horribly wrong"
     print e
