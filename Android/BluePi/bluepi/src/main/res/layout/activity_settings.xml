@@ -6,10 +6,18 @@
     android:paddingBottom="@dimen/activity_vertical_margin"
     tools:context="com.alansaul.bluepi.SettingsActivity">
 
-    <LinearLayout
+    <GridLayout
         android:orientation="horizontal"
         android:layout_width="fill_parent"
         android:layout_height="wrap_content"
+        android:gravity="center"
+        android:columnCount="3" >
+
+    <LinearLayout
+        android:orientation="vertical"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:layout_margin="@dimen/default_spacing"
         android:id="@+id/secondsLayout"
         android:gravity="center" >
 
@@ -18,34 +26,24 @@
             android:layout_height="wrap_content"
             android:text="Footage length\n(seconds):"
             android:id="@+id/secondsView"
-            android:textAlignment="center"
-            android:layout_alignParentTop="true"
-            android:layout_alignParentLeft="true"
-            android:layout_alignParentStart="true" />
-        <LinearLayout
-            android:orientation="horizontal"
-            android:layout_width="fill_parent"
-            android:layout_height="wrap_content"
-            android:gravity="right" >
+            android:textAlignment="center"/>
 
-            <NumberPicker
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:id="@+id/secondsPicker"
-                android:orientation="horizontal"
-                android:layout_alignTop="@+id/secondsPicker"
-                android:layout_alignParentRight="true"
-                android:layout_alignParentEnd="true" />
-        </LinearLayout>
+        <NumberPicker
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/secondsPicker"
+            android:orientation="vertical"
+            android:layout_alignTop="@+id/secondsPicker"/>
 
     </LinearLayout>
 
     <LinearLayout
-        android:orientation="horizontal"
-        android:layout_width="fill_parent"
-        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
         android:id="@+id/durationLayout"
         android:layout_below="@+id/secondsLayout"
+        android:layout_margin="@dimen/default_spacing"
         android:gravity="center" >
 
         <TextView
@@ -55,28 +53,20 @@
             android:id="@+id/durationView"
             android:textAlignment="center" />
 
-        <LinearLayout
-            android:orientation="horizontal"
-            android:layout_width="fill_parent"
-            android:layout_height="wrap_content"
-            android:gravity="right" >
-
             <NumberPicker
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:id="@+id/durationPicker"
-                android:orientation="horizontal"
-                android:layout_alignParentRight="true"
-                android:layout_alignParentEnd="true"
-                android:layout_toRightOf="@+id/durationView" />
-        </LinearLayout>
+                android:orientation="vertical"/>
+
     </LinearLayout>
 
     <LinearLayout
-        android:orientation="horizontal"
-        android:layout_width="fill_parent"
-        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
         android:id="@+id/shutterspeedLayout"
+        android:layout_margin="@dimen/default_spacing"
         android:layout_below="@+id/durationLayout"
         android:gravity="center" >
 
@@ -87,28 +77,19 @@
             android:id="@+id/shutterspeedView"
             android:textAlignment="center" />
 
-        <LinearLayout
-            android:orientation="horizontal"
-            android:layout_width="fill_parent"
-            android:layout_height="wrap_content"
-            android:gravity="right" >
-
             <NumberPicker
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:id="@+id/shutterspeedPicker"
-                android:orientation="horizontal"
-                android:layout_alignParentRight="true"
-                android:layout_alignParentEnd="true"
-                android:layout_toRightOf="@+id/shutterspeedViewView" />
-        </LinearLayout>
+                android:orientation="vertical"/>
     </LinearLayout>
 
     <LinearLayout
-        android:orientation="horizontal"
-        android:layout_width="fill_parent"
-        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
         android:id="@+id/lengthLayout"
+        android:layout_margin="@dimen/default_spacing"
         android:layout_below="@+id/shutterspeedLayout"
         android:gravity="center" >
 
@@ -119,27 +100,19 @@
             android:id="@+id/lengthView"
             android:textAlignment="center" />
 
-        <LinearLayout
-            android:orientation="horizontal"
-            android:layout_width="fill_parent"
+        <NumberPicker
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:gravity="right" >
-
-            <NumberPicker
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:id="@+id/lengthPicker"
-                android:orientation="horizontal"
-                android:layout_alignParentRight="true"
-                android:layout_alignParentEnd="true" />
-        </LinearLayout>
+            android:id="@+id/lengthPicker"
+            android:orientation="vertical" />
     </LinearLayout>
 
     <LinearLayout
-        android:orientation="horizontal"
-        android:layout_width="fill_parent"
-        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
         android:id="@+id/percentLayout"
+        android:layout_margin="@dimen/default_spacing"
         android:layout_below="@+id/lengthLayout"
         android:gravity="center" >
 
@@ -150,22 +123,18 @@
             android:id="@+id/percentageView"
             android:textAlignment="center" />
 
-        <LinearLayout
-            android:orientation="horizontal"
-            android:layout_width="fill_parent"
+        <Space
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="right" >
+            android:layout_weight="1" />
 
-            <NumberPicker
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:id="@+id/percentPicker"
-                android:orientation="horizontal"
-                android:layout_alignParentRight="true"
-                android:layout_alignParentEnd="true"
-                android:layout_toRightOf="@+id/percentageView" />
-        </LinearLayout>
+        <NumberPicker
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/percentPicker"
+            android:orientation="vertical"/>
     </LinearLayout>
+    </GridLayout>
 
     <Button
         android:layout_width="wrap_content"

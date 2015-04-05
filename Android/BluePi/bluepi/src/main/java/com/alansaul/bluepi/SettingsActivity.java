@@ -12,9 +12,15 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.NumberPicker;
 
+import java.util.ArrayList;
+import java.util.Map;
+
 
 public class SettingsActivity extends ActionBarActivity {
     private final String TAG="SETTINGS_THREAD";
+
+    ArrayList<ShutterPair> shutterspeedsAL;
+    Map<String, Float> shutterspeedsHash;
 
     NumberPicker shutterspeedPicker;
     NumberPicker durationPicker;
@@ -44,6 +50,26 @@ public class SettingsActivity extends ActionBarActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_settings);
 
+        //Make shutterspeeds
+        //FIXME: Import Guava and use BiMap later
+        /*
+        shutterspeedsHash = new HashMap<String, Float>();
+        shutterspeedsHash.put("1/500", 1/500f);
+        shutterspeedsHash.put("1/250", 1/250f);
+        shutterspeedsHash.put("1/2", 1/2f);
+        shutterspeedsHash.put("1\"", 1f);
+        shutterspeedsHash.put("5\"", 5f);
+        shutterspeedsHash.put("30\"", 5f);
+        */
+
+        shutterspeedsAL= new ArrayList<ShutterPair>();
+        shutterspeedsAL.add(new ShutterPair("1/500", 1/500f));
+        shutterspeedsAL.add(new ShutterPair("1/250", 1/250f));
+        shutterspeedsAL.add(new ShutterPair("1/2", 1/2f));
+        shutterspeedsAL.add(new ShutterPair("1\"", 1f));
+        shutterspeedsAL.add(new ShutterPair("5\"", 5f));
+        shutterspeedsAL.add(new ShutterPair("30\"", 30f));
+
         SharedPreferences settings = getSharedPreferences(PREFS_NAME, 0);
         footageSeconds = settings.getInt("footageSeconds", 20);
         filmingDurationMinutes = settings.getInt("filmDurationMinutes", 30);
@@ -69,12 +95,15 @@ public class SettingsActivity extends ActionBarActivity {
         durationPicker.setMinValue(1);
         durationPicker.setMaxValue(5000);
 
-        String[] values=new String[3];
-        values[0]="1/250";
-        values[1]="1/3";
-        values[2]="1\"";
-        shutterspeedPicker.setMaxValue(values.length-1);
+        //String[] shutterKeys = (String[]) shutterspeedsHash.keySet().toArray();
+        String[] shutterKeys = new String[shutterspeedsAL.size()];
+        for (int i=0; i < shutterspeedsAL.size(); i++){
+            shutterKeys[i] = shutterspeedsAL.get(i).key();
+        }
+
+        shutterspeedPicker.setMaxValue(shutterKeys.length-1);
         shutterspeedPicker.setMinValue(0);
+        shutterspeedPicker.setDisplayedValues(shutterKeys);
 
         percentPicker.setMinValue(0);
         percentPicker.setMaxValue(100);
@@ -89,9 +118,13 @@ public class SettingsActivity extends ActionBarActivity {
         percentComplete = settings.getInt("percentComplete", 0);
         barLengthCM = settings.getInt("barLengthCM", 150);
 
+
+        //FIXME: Lookup shutter index from float
+        int oldShutterIndex = 2;
+
         secondsPicker.setValue(footageSeconds);
         durationPicker.setValue(filmingDurationMinutes);
-        shutterspeedPicker.setDisplayedValues(values);
+        shutterspeedPicker.setValue(oldShutterIndex);
         percentPicker.setValue(percentComplete);
         lengthPicker.setValue(barLengthCM);
 
@@ -112,7 +145,7 @@ public class SettingsActivity extends ActionBarActivity {
     }
 
     protected void returnSettings(){
-        Settings settings = calculate_required_settings();
+        Settings settings = calculateRequiredSettings();
 
         Intent resultIntent = new Intent();
         resultIntent.putExtra(FILMDURATION, filmingDurationMinutes);
@@ -126,7 +159,7 @@ public class SettingsActivity extends ActionBarActivity {
         finish();
     }
 
-    private Settings calculate_required_settings(){
+    private Settings calculateRequiredSettings(){
         SharedPreferences settings = getSharedPreferences(PREFS_NAME, 0);
         filmingDurationMinutes = settings.getInt("filmingDurationMinutes", 30);
         footageSeconds = settings.getInt("footageSeconds", 20);
@@ -195,6 +228,10 @@ public class SettingsActivity extends ActionBarActivity {
         footageSeconds = secondsPicker.getValue();
         percentComplete = percentPicker.getValue();
         barLengthCM = lengthPicker.getValue();
+        filmingDurationMinutes = durationPicker.getValue();
+        int shutterspeedIndex = shutterspeedPicker.getValue();
+
+        shutterspeed = shutterspeedsAL.get(shutterspeedIndex).value();
 
         if (footageSeconds > 0) {
             editor.putInt("footageSeconds", footageSeconds);
@@ -206,6 +243,10 @@ public class SettingsActivity extends ActionBarActivity {
             editor.putInt("barLengthCM", barLengthCM);
         }
 
+        editor.putFloat("shutterspeed", shutterspeed);
+        editor.putInt("filmingDurationMinutes", filmingDurationMinutes);
+
+        Log.d(TAG, "Shutterspeed set to: " + Float.toString(shutterspeed));
         //Commit the settings
         editor.commit();
     }

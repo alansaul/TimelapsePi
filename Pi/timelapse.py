@@ -241,6 +241,7 @@ class RequestHandler(threading.Thread):
                         self.send_queue.put((SEND, INFO, details_data))
                 elif command == REQUEST and action == SETTINGS_CHANGE:
                     self.change_settings(data)
+                    #stop and start timelapse again
                 else:
                     print "Not a request I can handle yet"
             except Queue.Empty:
@@ -250,10 +251,24 @@ class RequestHandler(threading.Thread):
             callback()
 
     def change_settings(self, data):
-        """
-        Theres been a change of settings, next time the timelapse
-        is started these settings will be used
-        """
+        #Theres been a change of settings, next time the timelapse is started these settings will be used
+        if len(data) == 3:
+            try:
+                delay = int(data[0])
+                interval = int(data[1])
+                shutterspeed = float(data[2])
+            except Exception, e:
+                print "Something wrong with input data"
+                print e
+            self.interval = interval
+            self.pulse_width = delay
+            #FIXME: Set the shutterspeed
+        else:
+            print "It seems some settings were missing, ignoring change"
+
+    """
+    def change_settings(self, data):
+        #Theres been a change of settings, next time the timelapse is started these settings will be used
         if len(data) == 3:
             try:
                 minutes = int(data[0])
@@ -276,9 +291,7 @@ class RequestHandler(threading.Thread):
             print "It seems some settings were missing, ignoring change"
 
     def calculate_interval(self, minutes, percent, length, shutterspeed):
-        """
-        Calculate the interval (delay) and pulse length (distance) given settings
-        """
+        #Calculate the interval (delay) and pulse length (distance) given settings
         print "Calculating interval"
         num_photos = 60 * minutes * self.photos_per_second
         # Say it takes 0.5 seconds to respond to a request to take a photo
@@ -302,6 +315,7 @@ class RequestHandler(threading.Thread):
             return interval, pulse_length
         else:
             raise ValueError("Not enough seconds to use make this timelapse")
+    """
 
     def shutdown_pi(self):
         """Shutdown Pi gracefully"""

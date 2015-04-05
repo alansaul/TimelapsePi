@@ -46,6 +46,9 @@ public class MainActivity extends Activity {
     int footageSeconds;
     int percent;
     int length;
+    float shutterspeed;
+    int interval;
+    int delay;
 
     final int port = 1; //Bluetooth SSP port
     private BluetoothAdapter btAdapter = null;
@@ -266,14 +269,16 @@ public class MainActivity extends Activity {
                     footageSeconds = data.getIntExtra(SettingsActivity.FOOTAGESECONDS, 21);
                     percent = data.getIntExtra(SettingsActivity.PERCENT, 1);
                     length = data.getIntExtra(SettingsActivity.LENGTH, 151);
+                    shutterspeed = data.getFloatExtra(SettingsActivity.SHUTTERSPEED, 5f);
+                    interval = data.getIntExtra(SettingsActivity.INTERVAL, 3333);
+                    delay = data.getIntExtra(SettingsActivity.DELAY, 400);
+
                     SETTINGS_DATA = new String[3];
-                    SETTINGS_DATA[0] = Integer.toString(filmDurationMinutes);
-                    SETTINGS_DATA[1] = Integer.toString(percent);
-                    SETTINGS_DATA[2] = Integer.toString(length);
-                    Log.d(TAG, Integer.toString(filmDurationMinutes));
-                    Log.d(TAG, Integer.toString(percent));
-                    Log.d(TAG, Integer.toString(length));
-                    settingsText.setText("Minutes: " + filmDurationMinutes + "\n" + "Percent: " + percent + "\n" + "Length: " + length);
+                    SETTINGS_DATA[0] = Integer.toString(delay);
+                    SETTINGS_DATA[1] = Integer.toString(interval);
+                    SETTINGS_DATA[2] = Float.toString(shutterspeed);
+
+                    settingsText.setText("Minutes: " + filmDurationMinutes + "\nPercent: " + percent + "\nLength: " + length + "\nInterval: " + interval + "\nDelay: " + delay);
                 }
                 break;
                 }
